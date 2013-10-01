@@ -26,6 +26,11 @@ class Spree::OmniauthCallbacksController < Devise::OmniauthCallbacksController
           else
             user = Spree::User.find_by_email(auth_hash['info']['email']) || Spree::User.new
             user.apply_omniauth(auth_hash)
+            if cookies[:src]
+              user.source = cookies[:src]
+            else
+              user.source = "Organic"
+            end
             if user.save
               flash[:notice] = "Signed in successfully."
               sign_in_and_redirect :spree_user, user
