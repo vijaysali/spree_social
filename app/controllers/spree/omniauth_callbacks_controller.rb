@@ -2,6 +2,7 @@ class Spree::OmniauthCallbacksController < Devise::OmniauthCallbacksController
   include Spree::Core::ControllerHelpers::Common
   include Spree::Core::ControllerHelpers::Order
   include Spree::Core::ControllerHelpers::Auth
+  include AffiliateCredits
 
   def self.provides_callback_for(*providers)
     providers.each do |provider|
@@ -14,9 +15,12 @@ class Spree::OmniauthCallbacksController < Devise::OmniauthCallbacksController
           end
 
           authentication = Spree::UserAuthentication.find_by_provider_and_uid(auth_hash['provider'], auth_hash['uid'])
-
+          debugger
           if authentication.present?
             flash[:notice] = "Signed in successfully"
+            Interaction.create(:itype => "login", :user_id => authentication.user.id, :created_at => Time.now, :updated_at => Time.now)
+            notify = NotificationJobs.new
+            notify.to_do_when_user_logins(authentication.user)
             sign_in_and_redirect :spree_user, authentication.user
           elsif spree_current_user
             spree_current_user.apply_omniauth(auth_hash)
@@ -24,15 +28,35 @@ class Spree::OmniauthCallbacksController < Devise::OmniauthCallbacksController
             flash[:notice] = "Authentication successful."
             redirect_back_or_default(account_url)
           else
-            user = Spree::User.find_by_email(auth_hash['info']['email']) || Spree::User.new
-            user.apply_omniauth(auth_hash)
-            if cookies[:src]
-              user.source = cookies[:src]
-            else
-              user.source = "Organic"
+            existing_user = Spree::User.find_by_email(auth_hash['info']['email'])
+            user = existing_user || Spree::User.new
+            if existing_user.blank?
+              user.apply_omniauth(auth_hash)
+              if cookies[:src]
+                user.source = cookies[:src]
+              else
+                user.source = "Organic"
+              end
             end
             if user.save
               flash[:notice] = "Signed in successfully."
+              unless existing_user.blank?
+                Interaction.create(:itype => "login", :user_id => existing_user.id, :created_at => Time.now, :updated_at => Time.now)
+                notify = NotificationJobs.new
+                notify.to_do_when_user_logins(existing_user)
+              else
+                unless cookies[:ref_id].blank?
+                  sender = Spree::User.find_by_ref_id(cookies[:ref_id])
+                  if sender
+                    sender.affiliates.create(:user_id => user.id)
+                    #create credit (if required)
+                    create_affiliate_credits(sender, user, "register")
+                  end
+
+                  #destroy the cookie, as the affiliate record has been created.
+                  cookies[:ref_id] = nil
+                end
+              end
               sign_in_and_redirect :spree_user, user
             else
               session[:omniauth] = auth_hash.except('extra')
