@@ -15,7 +15,6 @@ class Spree::OmniauthCallbacksController < Devise::OmniauthCallbacksController
           end
 
           authentication = Spree::UserAuthentication.find_by_provider_and_uid(auth_hash['provider'], auth_hash['uid'])
-          debugger
           if authentication.present?
             flash[:notice] = "Signed in successfully"
             Interaction.create(:itype => "login", :user_id => authentication.user.id, :created_at => Time.now, :updated_at => Time.now)
@@ -23,6 +22,7 @@ class Spree::OmniauthCallbacksController < Devise::OmniauthCallbacksController
             notify.to_do_when_user_logins(authentication.user)
             sign_in_and_redirect :spree_user, authentication.user
           elsif spree_current_user
+            auth_hash.store("user_action", "login")
             spree_current_user.apply_omniauth(auth_hash)
             spree_current_user.save!
             flash[:notice] = "Authentication successful."
@@ -31,6 +31,7 @@ class Spree::OmniauthCallbacksController < Devise::OmniauthCallbacksController
             existing_user = Spree::User.find_by_email(auth_hash['info']['email'])
             user = existing_user || Spree::User.new
             if existing_user.blank?
+              auth_hash.store("user_action", "register")
               user.apply_omniauth(auth_hash)
               if cookies[:src]
                 user.source = cookies[:src]
