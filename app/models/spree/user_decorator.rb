@@ -8,6 +8,10 @@ Spree.user_class.class_eval do
       self.firstname = omniauth['info']['first_name'] if firstname.blank?
       self.email = omniauth['info']['email'] if email.blank?
     end
+    if omniauth['provider'] == 'google_oauth2'
+      self.firstname = omniauth['info']['first_name'] if firstname.blank?
+      self.email = omniauth['info']['email'] if email.blank?
+    end
     user_authentications.build(:provider => omniauth['provider'], :uid => omniauth['uid'], :user_action => omniauth["user_action"])
   end
 
